@@ -31,7 +31,7 @@
           {
             "group": "Python Basic",
             "pages": [
-              "essentials/markdown",
+              "essentials/python",
               "essentials/code",
               "essentials/images",
               "essentials/reusable-snippets"
