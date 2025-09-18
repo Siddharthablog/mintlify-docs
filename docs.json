@@ -89,7 +89,7 @@
     "global": {
       "anchors": [
         {
-          "anchor": "Resume",
+          "anchor": "My Resume",
           "href": "https://mintlify.com/docs",
           "icon": "book-open-cover"
         },
@@ -114,7 +114,7 @@
     "links": [
       {
         "label": "Support",
-        "href": "mani.siddhartha@gmail.com"
+        "href": "mailto:mani.siddhartha@gmail.com"
       }
     ],
     "primary": {
