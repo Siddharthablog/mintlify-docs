@@ -1,35 +1,186 @@
 ---
-title: 'Code blocks'
-description: 'Display inline code and code blocks'
-icon: 'code'
+title: "Technical Writing Style Guide"
+description: "Professional documentation principles and best practices for creating clear, concise, and effective technical content"
+icon: "book-open"
 ---
 
-## Inline code
+## Core Principles of Technical Writing
 
-To denote a `word` or `phrase` as code, enclose it in backticks (`).
+Effective technical documentation follows four foundational principles that ensure clarity and usability:
 
-```
-To denote a `word` or `phrase` as code, enclose it in backticks (`).
-```
+### 1. Clarity Over Cleverness
+Write to be understood, not to impress. Use simple, direct language that removes ambiguity.
 
-## Code blocks
+<Tip>
+**Good Example:** "Click the Save button to store your changes."
 
-Use [fenced code blocks](https://www.markdownguide.org/extended-syntax/#fenced-code-blocks) by enclosing code in three backticks and follow the leading ticks with the programming language of your snippet to get syntax highlighting. Optionally, you can also write the name of your code after the programming language.
+**Poor Example:** "Utilize the persistence mechanism to effectuate data retention."
+</Tip>
 
-```java HelloWorld.java
-class HelloWorld {
-    public static void main(String[] args) {
-        System.out.println("Hello, World!");
+### 2. Consistency in Terminology
+Use the same term for the same concept throughout your documentation. Create a glossary for complex projects.
+
+### 3. Audience-First Approach
+Understand your reader's technical level and adjust accordingly. Never assume prior knowledge without stating prerequisites.
+
+### 4. Actionable Content
+Provide clear steps, commands, and outcomes. Users should always know what to do next.
+
+## Best Practices for Professional Documentation
+
+### Structure Your Content
+
+- **Start with the "why"**: Explain the purpose before diving into details
+- **Use hierarchical headings**: Create a logical flow from H1 to H4
+- **Add a table of contents**: For documents longer than 3 sections
+- **Include examples**: Show, don't just tell
+
+### Writing Style Guidelines
+
+<CardGroup cols={2}>
+  <Card title="Active Voice" icon="check">
+    Use active voice for direct, engaging content.
+    
+    ✓ "The system processes the request"
+    
+    ✗ "The request is processed by the system"
+  </Card>
+  
+  <Card title="Present Tense" icon="clock">
+    Write in present tense for immediacy.
+    
+    ✓ "The function returns an array"
+    
+    ✗ "The function will return an array"
+  </Card>
+  
+  <Card title="Second Person" icon="user">
+    Address the reader directly.
+    
+    ✓ "You can configure the timeout"
+    
+    ✗ "Users can configure the timeout"
+  </Card>
+  
+  <Card title="Concise Sentences" icon="text-size">
+    Keep sentences under 25 words when possible.
+    
+    ✓ "Install the package using npm."
+    
+    ✗ "In order to install, you should use npm."
+  </Card>
+</CardGroup>
+
+## Annotated Code Example
+
+Here's a well-documented API function that demonstrates professional technical writing:
+
+```javascript authenticateUser.js
+/**
+ * Authenticates a user with email and password credentials.
+ * 
+ * This function validates user credentials against the database and returns
+ * a JWT token for subsequent authenticated requests. The token expires after
+ * 24 hours and must be included in the Authorization header for protected routes.
+ * 
+ * @param {string} email - User's email address (must be valid format)
+ * @param {string} password - User's password (minimum 8 characters)
+ * @returns {Promise<Object>} Authentication result object
+ * @returns {string} result.token - JWT authentication token
+ * @returns {Object} result.user - User profile information
+ * @throws {AuthError} When credentials are invalid
+ * @throws {NetworkError} When database connection fails
+ * 
+ * @example
+ * const result = await authenticateUser('user@example.com', 'securePass123');
+ * console.log(result.token); // "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+ */
+async function authenticateUser(email, password) {
+  // Validate input parameters
+  if (!isValidEmail(email)) {
+    throw new AuthError('Invalid email format');
+  }
+  
+  // Query database for user record
+  const user = await db.users.findByEmail(email);
+  
+  if (!user || !await bcrypt.compare(password, user.passwordHash)) {
+    throw new AuthError('Invalid credentials');
+  }
+  
+  // Generate JWT token with 24-hour expiration
+  const token = jwt.sign(
+    { userId: user.id, role: user.role },
+    process.env.JWT_SECRET,
+    { expiresIn: '24h' }
+  );
+  
+  return {
+    token,
+    user: {
+      id: user.id,
+      email: user.email,
+      name: user.name
     }
+  };
 }
 ```
 
-````md
-```java HelloWorld.java
-class HelloWorld {
-    public static void main(String[] args) {
-        System.out.println("Hello, World!");
-    }
-}
-```
-````
+### Why This Example Works
+
+<Steps>
+  <Step title="Comprehensive JSDoc Comments">
+    The function includes a detailed description, parameter types, return values, possible errors, and usage example.
+  </Step>
+  
+  <Step title="Inline Explanations">
+    Critical code sections have comments explaining the "why" not just the "what".
+  </Step>
+  
+  <Step title="Error Handling">
+    Documents all possible exceptions with clear error types.
+  </Step>
+  
+  <Step title="Real-World Example">
+    Shows actual usage with realistic data.
+  </Step>
+</Steps>
+
+## Quick Reference Checklist
+
+Before publishing any technical documentation:
+
+- [ ] Content is organized with clear headings and hierarchy
+- [ ] Code examples are tested and include output
+- [ ] All technical terms are defined or linked to definitions
+- [ ] Prerequisites are clearly stated upfront
+- [ ] Common errors and troubleshooting are documented
+- [ ] Examples include both success and error scenarios
+- [ ] Sentences use active voice and present tense
+- [ ] No assumptions about reader's prior knowledge
+- [ ] All commands, parameters, and options are documented
+- [ ] Content is reviewed for clarity by someone outside your team
+
+<Note>
+Remember: Great documentation is never "finished"—it evolves with your product. Schedule regular reviews and incorporate user feedback.
+</Note>
+
+## Additional Resources
+
+<CardGroup cols={2}>
+  <Card title="API Documentation" icon="code" href="/api-reference">
+    Learn how to document REST APIs with comprehensive examples
+  </Card>
+  
+  <Card title="CLI Documentation" icon="terminal" href="/cli">
+    Best practices for documenting command-line interfaces
+  </Card>
+  
+  <Card title="AI Integration Docs" icon="brain" href="/ai-tools">
+    Document AI features and model configurations effectively
+  </Card>
+  
+  <Card title="Code Examples" icon="file-code" href="/essentials/python">
+    Standards for writing and annotating code samples
+  </Card>
+</CardGroup>

@@ -1,0 +1,432 @@
+---
+title: 'CLI Documentation'
+description: 'Complete guide for TaskFlow Command Line Interface'
+icon: 'terminal'
+---
+
+## Overview
+
+TaskFlow CLI is a powerful command-line tool that allows developers and operators to manage tasks, projects, and deployments directly from the terminal. This guide covers installation, core commands, advanced features, and troubleshooting.
+
+**Current Version:** 2.1.0  
+**Platform Support:** macOS, Linux, Windows (WSL2)
+
+## Installation
+
+### macOS
+
+**Using Homebrew (Recommended)**
+
+```bash
+brew install taskflow-cli
+```
+
+**Manual Installation**
+
+```bash
+curl -fsSL https://install.taskflow.com/taskflow-macos-latest.tar.gz | tar xz
+sudo mv taskflow /usr/local/bin/
+```
+
+### Linux
+
+**Ubuntu/Debian**
+
+```bash
+sudo apt-get update
+sudo apt-get install taskflow-cli
+```
+
+**Red Hat/CentOS**
+
+```bash
+sudo yum install taskflow-cli
+```
+
+**Manual Installation**
+
+```bash
+wget https://install.taskflow.com/taskflow-linux-latest.tar.gz
+tar xzf taskflow-linux-latest.tar.gz
+sudo mv taskflow /usr/local/bin/
+```
+
+### Windows
+
+**Using Chocolatey**
+
+```powershell
+choco install taskflow-cli
+```
+
+**Using Windows Package Manager**
+
+```powershell
+winget install TaskFlow.TaskFlowCLI
+```
+
+### Verify Installation
+
+```bash
+taskflow --version
+# Output: taskflow version 2.1.0
+```
+
+## Initial Setup
+
+### Configure API Credentials
+
+```bash
+taskflow auth login
+```
+
+This command will prompt you to enter your API credentials and save them securely in `~/.taskflow/config.yml`.
+
+Alternatively, set environment variables:
+
+```bash
+export TASKFLOW_API_KEY="your_api_key_here"
+export TASKFLOW_API_URL="https://api.taskflow.com/v1"
+```
+
+### View Configuration
+
+```bash
+taskflow config show
+```
+
+## Core Commands
+
+### Task Management
+
+#### Create a New Task
+
+```bash
+taskflow task create \
+  --title "Implement authentication" \
+  --project "proj_123" \
+  --priority high \
+  --assignee "user_456" \
+  --due-date "2025-12-01"
+```
+
+**Options:**
+- `--title` (required): Task title
+- `--project` (required): Project ID
+- `--priority`: low, medium, high, urgent (default: medium)
+- `--assignee`: User ID to assign
+- `--due-date`: Due date in YYYY-MM-DD format
+- `--description`: Long description
+- `--tags`: Comma-separated tags
+
+#### List Tasks
+
+```bash
+# List all tasks in a project
+taskflow task list --project proj_123
+
+# Filter by status
+taskflow task list --project proj_123 --status "in-progress"
+
+# Filter by assignee
+taskflow task list --project proj_123 --assignee "user_456"
+
+# Export to JSON
+taskflow task list --project proj_123 --format json > tasks.json
+```
+
+#### Update a Task
+
+```bash
+taskflow task update task_789 \
+  --status "completed" \
+  --priority "low"
+```
+
+#### View Task Details
+
+```bash
+taskflow task show task_789
+```
+
+#### Delete a Task
+
+```bash
+taskflow task delete task_789 --force
+```
+
+### Project Management
+
+#### Create a Project
+
+```bash
+taskflow project create \
+  --name "Mobile App Redesign" \
+  --description "Redesign mobile experience" \
+  --owner "user_456"
+```
+
+#### List Projects
+
+```bash
+taskflow project list
+
+# List with pagination
+taskflow project list --limit 50 --offset 0
+```
+
+#### Archive a Project
+
+```bash
+taskflow project archive proj_123
+```
+
+### User Management
+
+#### Invite Users
+
+```bash
+taskflow user invite \
+  --email "john@example.com" \
+  --role "developer" \
+  --project "proj_123"
+```
+
+#### List Team Members
+
+```bash
+taskflow user list --project proj_123
+```
+
+## Advanced Features
+
+### Bulk Operations
+
+#### Bulk Update Tasks
+
+```bash
+taskflow task bulk-update \
+  --filter 'status=todo' \
+  --filter 'priority=low' \
+  --set 'status=backlog'
+```
+
+#### Bulk Import from CSV
+
+```bash
+taskflow task import tasks.csv \
+  --project proj_123 \
+  --map-column 'Title,Title' \
+  --map-column 'Assignee Email,Assignee'
+```
+
+### Automation Scripts
+
+#### Create Automated Workflow
+
+```bash
+taskflow workflow create workflow.yml
+```
+
+**Example workflow.yml:**
+
+```yaml
+name: Daily Status Report
+trigger:
+  type: schedule
+  cron: "0 9 * * MON-FRI"
+
+actions:
+  - type: list
+    project: proj_123
+    filter: 'status=in-progress'
+    output: json
+  
+  - type: notify
+    channel: slack
+    webhook: https://hooks.slack.com/...
+    message: "Daily standup: {{count}} tasks in progress"
+```
+
+### Configuration Files
+
+Create a `.taskflow.yml` file in your project root:
+
+```yaml
+project: proj_123
+default-assignee: user_456
+tags:
+  - backend
+  - production
+notifications:
+  email: true
+  slack: false
+```
+
+Then use it automatically:
+
+```bash
+taskflow task create --title "Fix bug"
+# Automatically uses project from .taskflow.yml
+```
+
+## Examples
+
+### Example 1: Weekly Task Report
+
+```bash
+#!/bin/bash
+# Generate weekly status report
+
+PROJECT="proj_123"
+WEEK=$(date +%V)
+
+echo "=== Week $WEEK Status Report ==="
+echo ""
+echo "Completed Tasks:"
+taskflow task list --project $PROJECT --status completed --format table
+
+echo ""
+echo "In Progress:"
+taskflow task list --project $PROJECT --status in-progress --format table
+
+echo ""
+echo "At Risk (Overdue):"
+taskflow task list --project $PROJECT --status in-progress --overdue --format table
+```
+
+### Example 2: Create Multiple Related Tasks
+
+```bash
+#!/bin/bash
+# Create sprint tasks from template
+
+PROJECT="proj_123"
+DUE_DATE="2025-11-20"
+
+tasks=(
+  "Finalize API documentation"
+  "Write unit tests"
+  "Code review"
+  "Merge to staging"
+  "QA testing"
+)
+
+for task in "${tasks[@]}"; do
+  taskflow task create \
+    --project $PROJECT \
+    --title "$task" \
+    --due-date $DUE_DATE \
+    --priority high
+done
+
+echo "Sprint tasks created successfully!"
+```
+
+## Troubleshooting
+
+### Authentication Issues
+
+**Problem:** "Unauthorized - Invalid API key"
+
+**Solution:**
+1. Verify your API key is correct: `taskflow config show`
+2. Regenerate API key in dashboard if expired
+3. Update configuration: `taskflow auth login`
+
+### Command Not Found
+
+**Problem:** `taskflow: command not found`
+
+**Solution:**
+1. Verify installation: `which taskflow`
+2. Check PATH: `echo $PATH`
+3. Reinstall: `curl -fsSL https://install.taskflow.com/install.sh | bash`
+
+### Connection Errors
+
+**Problem:** "Failed to connect to API"
+
+**Solution:**
+```bash
+# Check connectivity
+taskflow health check
+
+# Try alternate API endpoint
+export TASKFLOW_API_URL="https://api-backup.taskflow.com/v1"
+
+# Enable debug mode for more details
+taskflow --debug task list
+```
+
+### Permission Denied
+
+**Problem:** "Permission denied: cannot access project"
+
+**Solution:**
+1. Check user permissions: `taskflow user show`
+2. Request access from project owner
+3. Verify correct project ID: `taskflow project list`
+
+## Performance Tips
+
+1. **Use filters** to reduce data transfer:
+   ```bash
+   # Instead of fetching all then filtering
+   taskflow task list --project proj_123 --status "in-progress"
+   ```
+
+2. **Batch operations** for efficiency:
+   ```bash
+   # Process multiple tasks in one operation
+   taskflow task bulk-update --filter 'tag=urgent' --set 'priority=high'
+   ```
+
+3. **Cache credentials** securely:
+   ```bash
+   taskflow auth login --save-token
+   ```
+
+## Environment Variables
+
+| Variable | Description | Example |
+|----------|-------------|----------|
+| `TASKFLOW_API_KEY` | API authentication key | `tf_live_sk_...` |
+| `TASKFLOW_API_URL` | API endpoint URL | `https://api.taskflow.com/v1` |
+| `TASKFLOW_PROJECT` | Default project ID | `proj_123` |
+| `TASKFLOW_FORMAT` | Default output format | `json`, `table`, `csv` |
+| `TASKFLOW_DEBUG` | Enable debug logging | `true`, `false` |
+
+## Update & Version Management
+
+### Check for Updates
+
+```bash
+taskflow update check
+```
+
+### Update CLI
+
+```bash
+taskflow update install
+# or
+brew upgrade taskflow-cli  # macOS
+sudo apt-get upgrade taskflow-cli  # Ubuntu/Debian
+```
+
+### Downgrade to Previous Version
+
+```bash
+taskflow install --version 2.0.0
+```
+
+## Resources
+
+- **Online Documentation:** https://docs.taskflow.com/cli
+- **GitHub Issues:** https://github.com/taskflow/cli/issues
+- **Community Forum:** https://community.taskflow.com
+- **Changelog:** https://github.com/taskflow/cli/blob/main/CHANGELOG.md
+
+<Note>
+For enterprise deployments, TaskFlow CLI can be configured to work with self-hosted instances. Contact support@taskflow.com for enterprise setup assistance.
+</Note>

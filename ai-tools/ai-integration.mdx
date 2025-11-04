@@ -1,0 +1,147 @@
+---
+title: 'AI Integration Documentation'
+description: 'How to use and configure AI features in TaskFlow'
+icon: 'brain'
+---
+
+## Overview
+
+TaskFlow supports state-of-the-art AI features to automate, classify, and optimize your workflow. This guide explains how to enable AI, configure models, interpret results, and follow best practices for integration into real-world projects.
+
+**Supported Models:**
+- GPT-4 Turbo
+- Claude 3
+- TaskFlow Classifier (in-house)
+
+**AI Features:**
+- Smart Task Classification
+- Automated Summarization
+- Effort Estimation
+- Natural Language Query
+
+## Getting Started
+
+### Enable AI for Your Workspace
+
+1. Go to **Settings > AI Integrations**
+2. Toggle "Enable AI Features"
+3. Select your preferred model (GPT-4 Turbo, Claude 3, TaskFlow Classifier)
+4. (Optional) Enter your own API keys for third-party models
+5. Save settings
+
+### Permissions
+
+- Only workspace admins can manage AI configurations
+- All AI actions require explicit user confirmation before execution
+- Your data is never shared or used to train third-party models by default
+
+## Example Usage
+
+### Automatic Task Classification
+
+When you create or update a task, TaskFlow can automatically classify its type and urgency:
+
+```json
+{
+  "title": "Fix login authentication bug",
+  "description": "User authentication fails under load.",
+  "ai_class": {
+    "type": "bug",
+    "priority": "high",
+    "requires_action": true,
+    "suggested_assignee": "Backend Team"
+  }
+}
+```
+
+### AI Summarization of Project Status
+
+Use the `/summarize` command in Slack or the web dashboard:
+
+```bash
+/taskflow summarize project proj_123
+```
+
+**Example Output:**
+> There are 8 active tasks, 2 overdue bugs, and sprint completion is projected for Friday.
+
+### Effort Estimation with AI
+
+After typing requirements, click "Estimate Effort with AI". Results are provided as:
+
+```json
+{
+  "estimation": {
+    "hours": 14,
+    "risk": "medium",
+    "dependencies": ["API access", "QA approval"]
+  }
+}
+```
+
+### Natural Language Command
+
+You can ask TaskFlow AI assistant:
+- "List all urgent bugs assigned to me"
+- "When can we expect the next release?"
+- "Summarize completed tasks last week"
+
+### Model Configuration
+
+#### Custom Model Settings
+
+Each AI model can be tuned with the following parameters:
+- `max_tokens` (response length)
+- `temperature` (randomness, for creative tasks)
+- `top_p` (probability threshold)
+- `system_prompt` (role conditioning)
+
+**Example Configuration:**
+```yaml
+ai:
+  model: gpt-4-turbo
+  max_tokens: 1500
+  temperature: 0.3
+  top_p: 0.8
+  system_prompt: "You are a helpful project assistant."
+```
+
+### Verification of Results
+
+- Always review AI output before acting
+- Use the "Explain Reasoning" button for justification and model decision breakdown
+- For critical workflows, enable human-in-the-loop review
+
+## Best Practices for AI Documentation
+
+1. Clearly identify assumptions and dataset limitations
+2. Always request explicit user approval before any irreversible change
+3. Provide real example inputs and outputs for every AI feature
+4. Document edge cases and fallback logic
+5. Explain error codes and mitigation steps
+
+## Error Handling
+
+| Error Code | Description | Resolution |
+|------------|-------------|------------|
+| `MODEL_UNAVAILABLE` | AI service is down or misconfigured | Check model, API key, and internet connectivity |
+| `REQUEST_TOO_LARGE` | Input exceeds model limits | Reduce input size or split into parts |
+| `PERMISSION_DENIED` | Action not allowed | Check workspace permissions or contact admin |
+| `AI_TIMEOUT` | Model did not respond in time | Try again or switch to a faster model |
+
+## Privacy & Compliance
+
+- No customer data is sent to third-party models unless explicitly allowed
+- TaskFlow is GDPR and SOC 2 compliant for enterprise customers
+- Audit logs are kept for all AI interactions
+- Data retention settings can be customized under **Settings > Privacy**
+
+## Feedback & Support
+
+- Provide feedback on AI results using built-in thumbs up/down rating
+- For issues, email ai-support@taskflow.com
+- Security, privacy, and model bias concerns are handled with priority
+
+<Note>
+AI documentation should evolve with new features, models, and compliance requirements. Schedule regular reviews to maintain alignment with product capabilities.
+</Note>
