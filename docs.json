@@ -21,6 +21,20 @@
               "development"
             ]
           },
+                  {
+          "tab": "My Projects",
+          "groups": [
+            {
+              "group": "Portfolio",
+              "pages": [
+                "my-projects"              ]
+                      }                              ,
+                {
+                  "group": "PDF Link Checker",
+                  "pages": ["pdfverification"]
+            }
+          ]
+        },
           {
             "group": "AI Learnings",
             "pages": [
