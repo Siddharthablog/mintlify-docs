@@ -89,8 +89,8 @@
     "global": {
       "anchors": [
         {
-          "anchor": "My Resume",
-          "href": "https://mintlify.com/docs",
+          "anchor": "My Portfolio",
+          "href": "https://siddharthablog.github.io/AIwebsite/",
           "icon": "book-open-cover"
         },
         {
@@ -100,7 +100,7 @@
         },
         {
           "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
+          "href": "https://dev.to/siddhartha_mani_03",
           "icon": "newspaper"
         }
       ]
