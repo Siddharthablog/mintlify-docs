@@ -1,0 +1,305 @@
+---
+title: "Deploying a Streamlit ML App on Google Cloud with Kubernetes and Grafana"
+---
+
+If you have just built a Artificial Intelligence application using Streamlit and are wondering how to put it on the internet, this guide walks you through a complete, reproducible deployment workflow.
+
+You will deploy a Streamlit app to a Google Cloud VM, run it inside a Minikube Kubernetes cluster using Docker, expose it to the public internet, and optionally monitor it with Grafana Cloud.
+
+## Architecture overview
+
+Before writing any commands, it helps to understand the high-level architecture of the system you are about to deploy.
+
+![Gcp K8s Architecture](/images/gcp_k8s_architecture.png)
+
+The main components are:
+
+<Steps>
+  <Step title="Google Cloud VM instance">
+    A Linux virtual machine running in Google Cloud (Ubuntu). It is the host for Docker, Minikube, and your application.
+  </Step>
+  <Step title="Minikube Kubernetes cluster">
+    A single-node Kubernetes cluster running on the VM that manages pods, services, and deployments for your app.
+  </Step>
+  <Step title="Docker">
+    The container runtime that packages your code, dependencies (for example, `langchain-chroma`, `pandas`), and environment into a portable image.
+  </Step>
+  <Step title="Streamlit app">
+    Your Python web application, served on port `8501` inside a Kubernetes Pod.
+  </Step>
+  <Step title="Grafana Cloud">
+    A managed observability platform that collects and visualizes metrics such as CPU, memory, and network usage from your cluster.
+  </Step>
+</Steps>
+
+## Step 1: Prepare your repository
+
+Before using Google Cloud, ensure your code is cleanly organized and pushed to GitHub.
+
+Your github repository should include:
+
+- Application code (for example, `app.py`, `src/`).
+- A `requirements.txt` file listing all Python dependencies with compatible versions.
+- A `Dockerfile` describing how to build the container image for your app.
+- A Kubernetes manifest file for your deployment and service (for example, `llmops-k8s.yaml`).
+
+Keeping these assets version-controlled makes it easy to reproduce deployments and roll back safely.
+
+## Step 2: Create a Google Cloud VM
+
+Next, create the virtual machine that will host your Kubernetes cluster and application.
+
+1. Sign in to the Google Cloud Console.
+2. Navigate to **Compute Engine → VM instances** and select **Create instance**.
+3. Set a descriptive name, for example `streamlit-app-server`.
+4. Under **Machine configuration**, choose an **E2** machine type such as `e2-standard-4`, or ensure at least 16 GB of RAM for ML workloads.
+5. Under **Boot disk**, click **Change**, select **Ubuntu 24.04 LTS**, and increase disk size to about **256 GB** to accommodate Docker images and model files.
+6. In the **Firewall** section, enable **Allow HTTP traffic** and **Allow HTTPS traffic**.
+7. Click **Create** and wait until the VM is provisioned.
+8. Use the **SSH** button next to the instance to open a terminal in your browser.
+
+## Step 3: Install Docker
+
+With the VM running, install the tools required to build containers and manage the Kubernetes cluster.
+
+**Install Docker**
+
+Run the following commands in the SSH terminal to install and configure Docker:
+
+\`\`\`bash
+
+**Update package lists**
+
+sudo apt-get update
+
+sudo apt-get install -y ca-certificates curl
+
+**Add Docker's official GPG key**
+
+sudo install -m 0755 -d /etc/apt/keyrings
+
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+
+# Add Docker repository
+
+echo \\
+
+"deb [arch=\$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \\
+
+\$(. /etc/os-release && echo \\"\$VERSION_CODENAME\\") stable" | \\
+
+sudo tee /etc/apt/sources.list.d/docker.list \> /dev/null
+
+sudo apt-get update
+
+# Install Docker engine and plugins
+
+sudo apt-get install -y docker-ce docker-ce-cli [containerd.io](http://containerd.io) docker-buildx-plugin docker-compose-plugin
+
+# Allow running Docker without sudo
+
+sudo usermod -aG docker \$USER
+
+# Enable Docker on boot
+
+sudo systemctl enable docker.service
+
+sudo systemctl enable containerd.service
+
+\`\`\`
+
+You may need to run `newgrp docker` or log out and log back in for the group membership to take effect.
+
+## Step 4: Install Minikube
+
+Install Minikube (the local Kubernetes cluster)  by running the following commands::
+
+\`\`\`bash
+
+# Install Minikube
+
+curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+
+sudo install minikube-linux-amd64 /usr/local/bin/minikube
+
+rm minikube-linux-amd64
+
+## Step 5: Install kubectl
+
+sudo snap install kubectl --classic
+
+# Start the Minikube cluster
+
+minikube start
+
+\`\`\`
+
+At this point you have a running single-node Kubernetes cluster on your VM.
+
+---
+
+## Step 4: Clone your code and build the image
+
+Next, pull your application code onto the VM and build the Docker image that Kubernetes will run.
+
+\`\`\`bash
+
+# Clone your repository
+
+git clone https://github.com/YOUR_USERNAME/YOUR_REPO_NAME.git
+
+cd YOUR_REPO_NAME
+
+# Point Docker CLI to Minikube's Docker daemon
+
+eval \$(minikube docker-env)
+
+# Build the Docker image for your app
+
+docker build -t llmops-app:latest .
+
+\`\`\`
+
+Pointing Docker to the Minikube daemon ensures the image is available directly inside the cluster without needing an external registry.
+
+---
+
+## Step 5: Deploy the application to Kubernetes
+
+With the image built, you can deploy the Streamlit app as a Kubernetes deployment and service.
+
+First, create a Kubernetes Secret to store API keys and tokens:
+
+\`\`\`bash
+
+kubectl create secret generic llmops-secrets \\
+
+--from-literal=GROQ_API_KEY="your-groq-key-here" \\
+
+--from-literal=HUGGINGFACEHUB_API_TOKEN="your-hf-token-here"
+
+\`\`\`
+
+Then apply your Kubernetes manifest:
+
+\`\`\`bash
+
+# Apply deployment and service manifests
+
+kubectl apply -f llmops-k8s.yaml
+
+# Verify that the pod is running
+
+kubectl get pods
+
+\`\`\`
+
+Wait until the pod status shows `Running` before proceeding.
+
+---
+
+## Step 6: Expose the app to the internet
+
+Streamlit runs on port `8501` inside the cluster. You now need to make it reachable from the public internet.
+
+Because this setup uses Minikube instead of a cloud-managed Kubernetes service, you will use a combination of `minikube tunnel` and `kubectl port-forward`.
+
+Open two SSH sessions to the VM:
+
+### Terminal 1
+
+\`\`\`bash
+
+# Create a network tunnel from the VM into Minikube
+
+minikube tunnel
+
+\`\`\`
+
+Leave this command running; it establishes routes for LoadBalancer-type services.
+
+### Terminal 2
+
+\`\`\`bash
+
+# Forward the Kubernetes service port to an external port on the VM
+
+kubectl port-forward svc/llmops-service 8501:80 --address 0.0.0.0
+
+\`\`\`
+
+This forwards traffic from port `8501` on the VM to port `80` on the Kubernetes service.
+
+Finally, in the Google Cloud Console, note the **External IP** of your VM and open it in your browser:
+
+\`\`\`text
+
+http://\<YOUR_EXTERNAL_IP\>:8501
+
+\`\`\`
+
+You should now see your live Streamlit application running on Google Cloud.
+
+---
+
+## Step 7: Configure Grafana Cloud monitoring (optional)
+
+To monitor resource usage and the health of your cluster, you can integrate Grafana Cloud.
+
+1. Go to https://grafana.com/ and create a Grafana Cloud account.
+2. In Grafana, open **Observability → Kubernetes → Start sending data**.
+3. Start a new integration, giving it a name such as `minikube` and `monitoring`.
+4. Generate an access token (for example, `minikube-token`) and store it securely.
+5. Grafana will provide a `helm upgrade --install ...` command that deploys the required agents.
+
+On your VM:
+
+\`\`\`bash
+
+# Create a dedicated namespace for monitoring components
+
+kubectl create ns monitoring
+
+\`\`\`
+
+Then paste and run the `helm upgrade` command provided by Grafana. After a few minutes, verify that the agents are running:
+
+\`\`\`bash
+
+kubectl get pods -n monitoring
+
+\`\`\`
+
+Back in Grafana Cloud, open the Kubernetes dashboards to view CPU, memory, and network metrics for your cluster and application.
+
+---
+
+## Step 8: Updating the deployed application
+
+When you push a bug fix or feature update to GitHub, you can roll out the change with a short sequence of commands on the VM.
+
+From your application directory:
+
+\`\`\`bash
+
+# 1. Pull the latest code
+
+git pull origin main
+
+# 2. Ensure Docker is pointing to Minikube's daemon (if you opened a new session)
+
+eval \$(minikube docker-env)
+
+# 3. Rebuild the Docker image with the updated code
+
+docker build -t llmops-app:latest .
+
+# 4. Restart the Kubernetes deployment to use the new image
+
+kubectl rollout restart deployment llmops-app
+
+\`\`\`
+
+Kubernetes will roll out updated pods, and once they are ready, refreshing your browser will show the new version of your Streamlit app.

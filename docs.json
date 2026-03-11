@@ -26,6 +26,7 @@
           {
             "group": "AI Learnings",
             "pages": [
+              "essentials/gcaideploymet",
               "essentials/settings",
               "essentials/navigation"
             ]
