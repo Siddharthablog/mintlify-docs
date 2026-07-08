@@ -2,9 +2,7 @@
 title: "Deploying a Streamlit ML App on Google Cloud with Kubernetes and Grafana"
 ---
 
-If you have just built a Artificial Intelligence application using Streamlit and are wondering how to put it on the internet, this guide walks you through a complete, reproducible deployment workflow.
-
-You will deploy a Streamlit app to a Google Cloud VM, run it inside a Minikube Kubernetes cluster using Docker, expose it to the public internet, and optionally monitor it with Grafana Cloud.
+If you have built a Streamlit-based Machine Learning or AI application and are wondering how to make it accessible on the internet, this guide walks through a complete cloud-native deployment workflow. By the end, you will deploy a Streamlit app to a Google Cloud VM, run it inside a Minikube Kubernetes cluster using Docker, expose it to the public internet, and optionally monitor it with Grafana Cloud.
 
 ## Architecture overview
 
@@ -16,119 +14,380 @@ The main components are:
 
 <Steps>
   <Step title="Google Cloud VM instance">
-    A Linux virtual machine running in Google Cloud (Ubuntu). It is the host for Docker, Minikube, and your application.
+    An Ubuntu-based virtual machine provisioned on Google Cloud Compute Engine. This VM acts as the infrastructure layer. It hosts Docker, Minikube, and the Kubernetes workloads that run the Streamlit application.
   </Step>
   <Step title="Minikube Kubernetes cluster">
-    A single-node Kubernetes cluster running on the VM that manages pods, services, and deployments for your app.
+    A single-node Kubernetes cluster running on the VM that manages pods, services, and deployments for the application.
   </Step>
   <Step title="Docker">
-    The container runtime that packages your code, dependencies (for example, `langchain-chroma`, `pandas`), and environment into a portable image.
+    A containerization platform that bundles the application source code, Python dependencies, and runtime configuration into a portable container image that runs consistently across environments.
   </Step>
   <Step title="Streamlit app">
-    Your Python web application, served on port `8501` inside a Kubernetes Pod.
+    A Python web application served on port 8501 inside a Kubernetes pod.
   </Step>
   <Step title="Grafana Cloud">
-    A managed observability platform that collects and visualizes metrics such as CPU, memory, and network usage from your cluster.
+    A managed observability platform for monitoring Kubernetes resources in real time. Monitored resources include nodes, pods, deployments, CPU usage, memory utilization, and overall cluster health.
   </Step>
 </Steps>
 
-## Step 1: Prepare your repository
+## Step 1: Prepare the repository
 
-Before using Google Cloud, ensure your code is cleanly organized and pushed to GitHub.
+Before using Google Cloud, verify that the code is organized and pushed to GitHub.
 
-Your github repository should include:
+The GitHub repository should include:
 
-- Application code (for example, `app.py`, `src/`).
-- A `requirements.txt` file listing all Python dependencies with compatible versions.
-- A `Dockerfile` describing how to build the container image for your app.
-- A Kubernetes manifest file for your deployment and service (for example, `llmops-k8s.yaml`).
+- Application code, for example`app.py`, `src/`.
+- A `requirements.txt`file listing all Python dependencies with compatible versions.
+- A `Dockerfile`describing how to build the container image for the application.
+- A Kubernetes manifest file for the deployment and service, for example`llmops-k8s.yaml`.
 
-Keeping these assets version-controlled makes it easy to reproduce deployments and roll back safely.
+Keeping these assets version-controlled makes it easy to reproduce deployments and roll back safely.
 
 ## Step 2: Create a Google Cloud VM
 
-Next, create the virtual machine that will host your Kubernetes cluster and application.
+Create the virtual machine that will host the Kubernetes cluster and application.
 
 1. Sign in to the Google Cloud Console.
-2. Navigate to **Compute Engine → VM instances** and select **Create instance**.
-3. Set a descriptive name, for example `streamlit-app-server`.
-4. Under **Machine configuration**, choose an **E2** machine type such as `e2-standard-4`, or ensure at least 16 GB of RAM for ML workloads.
-5. Under **Boot disk**, click **Change**, select **Ubuntu 24.04 LTS**, and increase disk size to about **256 GB** to accommodate Docker images and model files.
-6. In the **Firewall** section, enable **Allow HTTP traffic** and **Allow HTTPS traffic**.
-7. Click **Create** and wait until the VM is provisioned.
-8. Use the **SSH** button next to the instance to open a terminal in your browser.
+2. Click **Compute Engine \> VM instances**, and then click **Create instance**.
+3. Set a descriptive name, for example ,`streamlit-app-server`.
+4. Under **Machine configuration**, select an E2 machine type.\
+   If you are running ML workloads, ensure that the machine type has at least 16 GB of RAM, for example, `e2-standard-4`.
+5. Under **Boot disk**, click **Change**, select Ubuntu 24.04 LTS, and increase the disk size to approximately 256 GB to accommodate Docker images and model files.
+6. In the **Firewall** section, enable **Allow HTTP traffic** and **Allow HTTPS traffic**.
+7. Click **Create** and wait until the VM is ready.
+8. Click the **SSH** button next to the instance to open a terminal in the browser.
 
-## Step 3: Install Docker
+<Info>
+  #### What happens during VM provisioning?
 
-With the VM running, install the tools required to build containers and manage the Kubernetes cluster.
+  At this stage, Google Cloud provisions a dedicated Ubuntu server for the deployment. This server hosts the following components:
 
-**Install Docker**
+  - Docker Engine
 
-Run the following commands in the SSH terminal to install and configure Docker:
+  - Minikube Kubernetes cluster
 
-\`\`\`bash
+  - `kubectl` command-line tool
 
-**Update package lists**
+  - Streamlit application containers
 
+  The VM supports the entire deployment architecture.
+</Info>
+
+## Step 3: **Install and configure Docker**
+
+Docker is the containerization platform that packages the Streamlit application, its dependencies, and runtime environment into a portable image that can be deployed consistently across environments.
+
+Docker is also a prerequisite for Minikube, because Minikube uses Docker as its container runtime when creating the Kubernetes cluster.
+
+### **Install Docker**
+
+Complete the following substeps to install Docker Engine.
+
+#### **Install Docker dependencies**
+
+Update the package repository and install the utilities required to download Docker packages securely:
+
+```shell
 sudo apt-get update
-
 sudo apt-get install -y ca-certificates curl
+```
 
-**Add Docker's official GPG key**
+#### **Add the official Docker GPG key**
 
+Ubuntu verifies package authenticity using GPG keys. The official Docker GPG key ensures that the packages being installed come from a trusted source:
+
+```shell
 sudo install -m 0755 -d /etc/apt/keyrings
-
-sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
-
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
+  -o /etc/apt/keyrings/docker.asc
 sudo chmod a+r /etc/apt/keyrings/docker.asc
+```
 
-# Add Docker repository
+#### **Add the Docker package repository**
 
-echo \\
+Add the official Docker package repository to the system so that Ubuntu can download the latest Docker packages directly from the Docker-maintained repository:
 
-"deb [arch=\$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \\
-
-\$(. /etc/os-release && echo \\"\$VERSION_CODENAME\\") stable" | \\
-
-sudo tee /etc/apt/sources.list.d/docker.list \> /dev/null
+```shell
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] \
+  https://download.docker.com/linux/ubuntu \
+  $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
 
 sudo apt-get update
+```
 
-# Install Docker engine and plugins
+#### **Install Docker Engine**
 
-sudo apt-get install -y docker-ce docker-ce-cli [containerd.io](http://containerd.io) docker-buildx-plugin docker-compose-plugin
+Install Docker Engine and its associated plugins:
 
-# Allow running Docker without sudo
+```shell
+sudo apt-get install -y docker-ce docker-ce-cli \
+  containerd.io docker-buildx-plugin docker-compose-plugin
+```
 
-sudo usermod -aG docker \$USER
+The installation includes the following components:
 
-# Enable Docker on boot
+- Docker Engine
+- Docker CLI
+- Container runtime (containerd)
+- Buildx plugin
+- Docker Compose plugin
 
+#### **Allow Docker usage without** `sudo`
+
+By default, Docker commands require elevated privileges. Add the current user to the Docker group to run Docker commands without using `sudo`:
+
+```shell
+sudo usermod -aG docker $USER
+```
+
+> **Note:** Run `newgrp docker`, or log out and log in again, for the group membership change to take effect.
+
+#### **Enable Docker on system startup**
+
+Configure Docker services to start automatically when the VM reboots:
+
+```shell
 sudo systemctl enable docker.service
-
 sudo systemctl enable containerd.service
+```
 
-\`\`\`
+#### **Verify the installation**
 
-You may need to run `newgrp docker` or log out and log back in for the group membership to take effect.
+To verify that Docker is installed correctly, run:
 
-## Step 4: Install Minikube
+```text
+docker run hello-world
+```
 
-Install Minikube (the local Kubernetes cluster)  by running the following commands::
+<Note>
+  **Note:** If Docker is run without `sudo`, a permission-denied error might occur. This happens because the current user has not yet been added to the Docker user group. The Docker post-installation steps resolve this issue by granting the appropriate permissions.
+</Note>
 
-\`\`\`bash
+After the configuration is complete, the command displays:
 
-# Install Minikube
+```text
+Hello from Docker!
+```
 
+This verifies that the Docker daemon is running and can pull and run containers.
+
+#### **Validate the Docker configuration**
+
+To confirm that Docker is operating correctly, run:
+
+```shell
+systemctl status docker
+docker ps
+docker ps -a
+```
+
+Expected results:
+
+- The Docker service status shows `active (running)`.
+- `docker ps` returns no running containers.
+- `docker ps -a` displays the previously run `hello-world` container in an exited state.
+
+<Info>
+  #### **Docker in the deployment architecture**
+
+  At this stage, the deployment architecture consists of the following layers:
+
+  - **Google Cloud VM** — the infrastructure layer
+  - **Docker Engine** — installed and running on the VM
+  - **Container runtime** — ready to build images and run containers
+
+  The VM can now build Docker images and run containers. In the next step, Minikube uses Docker to create a Kubernetes cluster that hosts the Streamlit application.
+</Info>
+
+## Step 4: **Install Minikube and create a Kubernetes cluster**
+
+Minikube is a single-node Kubernetes distribution that creates a Kubernetes cluster inside the Google Cloud VM. It uses Docker as its container runtime, making Docker a prerequisite for this step.
+
+### **Kubernetes orchestration**
+
+Rather than running containers directly on the VM, Kubernetes provides an orchestration layer that manages the following resources:
+
+- pods
+- deployments
+- services
+- secrets
+- namespaces
+
+Kubernetes enables applications to be deployed, updated, and monitored through a consistent, declarative management model.
+
+### **Install Minikube**
+
+Download and install the Minikube binary:
+
+```shell
+# Download Minikube
 curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
 
+# Install Minikube
 sudo install minikube-linux-amd64 /usr/local/bin/minikube
 
+# Remove the installation package
 rm minikube-linux-amd64
+```
 
-## Step 5: Install kubectl
+### **Start the Kubernetes cluster**
 
+When `minikube start` runs, Minikube uses Docker to create and configure the Kubernetes control plane, including the API server, scheduler, controller manager, and kubelet services.
+
+Start the cluster:
+
+```shell
+minikube start
+```
+
+### **Verify the cluster**
+
+Check the cluster status:
+
+```shell
+minikube status
+```
+
+The command displays output similar to the following example:
+
+```txt
+host: Running
+kubelet: Running
+apiserver: Running
+```
+
+To verify that the Minikube node is available, run:
+
+```shell
+kubectl get nodes
+```
+
+The command displays output similar to the following example:
+
+```txt
+NAME       STATUS   ROLES           AGE
+minikube   Ready    control-plane   ...
+```
+
+A `Ready` status indicates that the cluster is running and ready to host workloads.
+
+<Info>
+  #### **Minikube in the deployment architecture**
+
+  The infrastructure now includes the following layers:
+
+  - Infrastructure: Google Cloud VM
+  - Containerization: Docker Engine
+  - Kubernetes distribution: Minikube
+  - Cluster resources: pods, services, and deployments
+</Info>
+
+The next step installs `kubectl`, the command-line tool used to interact with and manage Kubernetes resources.
+
+## Step 5: **Install** `kubectl `**and verify cluster connectivity**
+
+`kubectl` is the command-line tool for Kubernetes. It communicates with the Kubernetes API server and enables the following operations:
+
+- Creating deployments
+- Managing pods
+- Exposing services
+- Viewing logs
+- Monitoring cluster resources
+- Creating namespaces
+- Working with Kubernetes secrets
+
+### **Install** `kubectl`
+
+Install `kubectl` by using Snap:
+
+```shell
 sudo snap install kubectl --classic
+```
+
+To install `kubectl` by using the official Kubernetes binary instead, see the [Kubernetes documentation](https://kubernetes.io/docs/tasks/tools/).
+
+### **Verify the installation**
+
+Verify that `kubectl` is available:
+
+```shell
+kubectl version --client
+```
+
+The command displays output similar to the following example:
+
+```txt
+Client Version: vX.X.X
+```
+
+This confirms that `kubectl` is installed.
+
+### **Verify cluster connectivity**
+
+Verify that `kubectl` can communicate with the Minikube cluster.
+
+Check the cluster status:
+
+```shell
+minikube status
+```
+
+The command displays output similar to the following example:
+
+```txt
+host: Running
+kubelet: Running
+apiserver: Running
+```
+
+View the nodes managed by Kubernetes:
+
+```shell
+kubectl get nodes
+```
+
+The command displays output similar to the following example:
+
+```txt
+NAME       STATUS   ROLES           AGE
+minikube   Ready    control-plane   ...
+```
+
+A `Ready` status indicates that the cluster is running and ready to host workloads.
+
+View cluster information:
+
+```shell
+kubectl cluster-info
+```
+
+The command displays details about the Kubernetes control plane and confirms that the API server is accessible.
+
+### **Verify Minikube and Docker integration**
+
+Minikube uses Docker as its container runtime. To confirm that the cluster components are running, check the active Docker containers:
+
+```shell
+docker ps
+```
+
+The output lists containers associated with Minikube and Kubernetes, indicating that the cluster is running correctly.
+
+<Info>
+  #### `kubectl `**in the deployment architecture**
+
+  The deployment architecture now consists of the following layers:
+
+  - Infrastructure: Google Cloud VM
+  - Containerization: Docker Engine
+  - Kubernetes distribution: Minikube
+  - Cluster management: `kubectl`
+  - API endpoint: Kubernetes API server
+</Info>
+
+The next step connects the VM to the GitHub repository to pull the application source code for deployment.
 
 # Start the Minikube cluster
 
@@ -148,9 +407,9 @@ Next, pull your application code onto the VM and build the Docker image that Kub
 
 # Clone your repository
 
-git clone https://github.com/YOUR_USERNAME/YOUR_REPO_NAME.git
+git clone [https://github.com/YOUR\_USERNAME/YOUR\_REPO\_NAME.git](https://github.com/YOUR_USERNAME/YOUR_REPO_NAME.git)
 
-cd YOUR_REPO_NAME
+cd YOUR\_REPO\_NAME
 
 # Point Docker CLI to Minikube's Docker daemon
 
@@ -176,9 +435,9 @@ First, create a Kubernetes Secret to store API keys and tokens:
 
 kubectl create secret generic llmops-secrets \\
 
---from-literal=GROQ_API_KEY="your-groq-key-here" \\
+--from-literal=GROQ\_API\_KEY="your-groq-key-here" \\
 
---from-literal=HUGGINGFACEHUB_API_TOKEN="your-hf-token-here"
+--from-literal=HUGGINGFACEHUB\_API\_TOKEN="your-hf-token-here"
 
 \`\`\`
 
@@ -236,7 +495,7 @@ Finally, in the Google Cloud Console, note the **External IP** of your VM and op
 
 \`\`\`text
 
-http://\<YOUR_EXTERNAL_IP\>:8501
+http://\<YOUR\_EXTERNAL\_IP\>:8501
 
 \`\`\`
 
@@ -248,7 +507,7 @@ You should now see your live Streamlit application running on Google Cloud.
 
 To monitor resource usage and the health of your cluster, you can integrate Grafana Cloud.
 
-1. Go to https://grafana.com/ and create a Grafana Cloud account.
+1. Go to [https://grafana.com/](https://grafana.com/) and create a Grafana Cloud account.
 2. In Grafana, open **Observability → Kubernetes → Start sending data**.
 3. Start a new integration, giving it a name such as `minikube` and `monitoring`.
 4. Generate an access token (for example, `minikube-token`) and store it securely.
