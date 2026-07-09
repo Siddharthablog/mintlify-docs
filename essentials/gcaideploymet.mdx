@@ -389,121 +389,415 @@ The output lists containers associated with Minikube and Kubernetes, indicating 
 
 The next step connects the VM to the GitHub repository to pull the application source code for deployment.
 
-# Start the Minikube cluster
+## Step 6: **Connect the VM to GitHub and clone the repository**
 
-minikube start
+This step brings the application source code onto the VM by cloning the GitHub repository. The VM can then pull updated code when changes are pushed from the local development machine.
 
-\`\`\`
+### **Clone the repository**
 
-At this point you have a running single-node Kubernetes cluster on your VM.
+Clone the repository onto the VM:
 
----
+```shell
+git clone https://github.com/<username>/<repository>.git
+```
 
-## Step 4: Clone your code and build the image
+List the directory contents to confirm the clone succeeded:
 
-Next, pull your application code onto the VM and build the Docker image that Kubernetes will run.
+```shell
+ls
+```
 
-\`\`\`bash
+Change into the project directory:
 
-# Clone your repository
+```shell
+cd <repository>
+ls
+```
 
-git clone [https://github.com/YOUR\_USERNAME/YOUR\_REPO\_NAME.git](https://github.com/YOUR_USERNAME/YOUR_REPO_NAME.git)
+The directory contains files similar to the following example:
 
-cd YOUR\_REPO\_NAME
+```txt
+Dockerfile
+requirements.txt
+app.py
+src/
+llmops-k8s.yaml
+```
 
-# Point Docker CLI to Minikube's Docker daemon
+This confirms that the application source code is available on the VM.
 
-eval \$(minikube docker-env)
+### **Configure Git identity**
 
-# Build the Docker image for your app
+Configure Git with the GitHub username and email address:
 
+```shell
+git config --global user.email "username@example.com"
+git config --global user.name "<github-username>"
+```
+
+This configuration associates commits made from the VM with the correct GitHub account.
+
+### **Authenticate by using a GitHub personal access token**
+
+When pushing changes from the VM, GitHub requires authentication by using a personal access token (PAT) instead of an account password.
+
+To generate a token, navigate to:
+
+**GitHub \> Settings \> Developer settings \> Personal access tokens**
+
+Grant read and write access to the repository, and store the token in a protected location. Git uses this token when it prompts for authentication credentials.
+
+### **Synchronize changes between environments**
+
+To confirm that the VM and the GitHub repository are connected, pull the latest changes:
+
+```shell
+git pull origin main
+```
+
+When code is updated on the local machine, push the changes to GitHub:
+
+```shell
+git add .
+git commit -m "Updated application"
+git push origin main
+```
+
+To retrieve those updates on the VM, run:
+
+```shell
+git pull origin main
+```
+
+<Info>
+  #### **GitHub and VM connectivity overview**
+
+  The three environments are now connected:
+
+  - Local machine: the development environment where code changes originate
+  - GitHub: the central repository that stores and version-controls the application code
+  - Google Cloud VM: the deployment target that pulls code from GitHub
+
+  The VM now has access to the latest application code and deployment manifests. The next step configures network access and deploys the application into the Kubernetes cluster.Point Docker CLI to Minikube's Docker daemon.
+</Info>
+
+## Step 7: **Configure Google Cloud firewall rules**
+
+By default, Google Cloud blocks all incoming network traffic. To make the Streamlit application accessible from the internet, configure a firewall rule that allows external traffic to reach the VM.
+
+### **Firewall rule requirements**
+
+The Streamlit application is exposed through a Kubernetes service and a Minikube tunnel. The firewall rule must allow inbound connections on the ports used by those services.
+
+#### **Create a firewall rule**
+
+In the Google Cloud Console, navigate to:
+
+**VPC network \> Firewall \> Create firewall rule**
+
+Configure the rule with the following settings:
+
+| Setting | Value |
+| :-- | :-- |
+| Direction | Ingress |
+| Action | Allow |
+| Targets | All instances in the network |
+| Source filter | IPv4 ranges |
+| Source IPv4 range | `0.0.0.0/0` |
+
+The source IPv4 range `0.0.0.0/0` allows inbound connections from any IP address.
+
+### **Allow application traffic**
+
+Configure the firewall rule to allow traffic on the following ports:
+
+- `80` (HTTP)
+- `443` (HTTPS)
+- `8501` (Streamlit application)
+
+These ports allow requests to reach the Kubernetes service that exposes the application.
+
+### **Firewall rule effect**
+
+Before the firewall rule is applied, all incoming traffic is blocked at the network boundary and does not reach the VM.
+
+After the firewall rule is applied, the traffic flow is:
+
+- Internet
+- Google Cloud firewall (rule allows ingress)
+- Google Cloud VM
+- Kubernetes cluster
+
+External users can reach services running inside the VM, making it possible to expose the Streamlit application publicly.
+
+### **Verify the firewall rule**
+
+After creating the rule, verify that the firewall rule appears in the **Firewall rules** list and that its status is enabled.
+
+When the Kubernetes LoadBalancer service is created in a later step, traffic can reach the application from outside the Google Cloud network.
+
+## Step 8: B**uild the Docker image and deploy the application to Kubernetes**
+
+This step builds the Docker image from the application source code and deploys it into the Minikube Kubernetes cluster.
+
+### **Point Docker to the Minikube environment**
+
+Before building the image, configure Docker to use the Minikube internal Docker daemon. Images built in this context are available directly to Kubernetes without requiring a push to an external container registry.
+
+Run the following command:
+
+```shell
+eval $(minikube docker-env)
+```
+
+### **Build the Docker image**
+
+Change into the project root directory, then build the image:
+
+```shell
 docker build -t llmops-app:latest .
+```
 
-\`\`\`
+During the build, Docker performs the following operations:
 
-Pointing Docker to the Minikube daemon ensures the image is available directly inside the cluster without needing an external registry.
+1. Pulls the base Python image.
+2. Creates a working directory inside the container.
+3. Copies application files into the image.
+4. Installs dependencies from `requirements.txt`.
+5. Exposes the Streamlit port (`8501`).
+6. Configures the container startup command.
 
----
+The resulting image is tagged as `llmops-app:latest` and contains everything required to run the Streamlit application.
 
-## Step 5: Deploy the application to Kubernetes
+### **Verify the Docker image**
 
-With the image built, you can deploy the Streamlit app as a Kubernetes deployment and service.
+Verify that the image was created successfully:
 
-First, create a Kubernetes Secret to store API keys and tokens:
+```shell
+docker images
+```
 
-\`\`\`bash
+The command displays output similar to the following example:
 
-kubectl create secret generic llmops-secrets \\
+```txt
+REPOSITORY    TAG      IMAGE ID
+llmops-app    latest   xxxxxxxxx
+```
 
---from-literal=GROQ\_API\_KEY="your-groq-key-here" \\
+When the image appears in the list, the build is complete.
 
---from-literal=HUGGINGFACEHUB\_API\_TOKEN="your-hf-token-here"
+### **Create Kubernetes secrets**
 
-\`\`\`
+Storing credentials in source code or repositories exposes them to unauthorized access. Use Kubernetes secrets to inject API keys as environment variables into the application pods. The application reads the credentials from the environment variables, keeping them out of the source code.
 
-Then apply your Kubernetes manifest:
+Create the secret:
 
-\`\`\`bash
+```shell
+kubectl create secret generic llmops-secrets \
+  --from-literal=GROQ_API_KEY="<GROQ_API_KEY>" \
+  --from-literal=HUGGINGFACEHUB_API_TOKEN="<HUGGINGFACE_TOKEN>"
+```
 
-# Apply deployment and service manifests
+The deployment manifest references these secrets and injects them as environment variables inside the container at runtime.
 
+### **Deploy the application**
+
+Apply the Kubernetes deployment manifest:
+
+```shell
 kubectl apply -f llmops-k8s.yaml
+```
 
-# Verify that the pod is running
+The command displays output similar to the following example:
 
+```txt
+deployment.apps/llmops created
+service/llmops-service created
+```
+
+The `llmops-k8s.yaml` file defines two Kubernetes resources:
+
+- **Deployment** — creates and manages the application pods
+- **Service** — exposes the pods internally and externally
+
+Kubernetes schedules the pod and starts the Streamlit container by using the Docker image built in the previous step.
+
+### **Verify pod status**
+
+Verify that the application pod is running:
+
+```shell
 kubectl get pods
+```
 
-\`\`\`
+The command displays output similar to the following example:
 
-Wait until the pod status shows `Running` before proceeding.
+```txt
+NAME                          READY   STATUS
+llmops-deployment-xxxxx       1/1     Running
+```
 
----
+A status of `Running` indicates that the application started successfully inside Kubernetes.
 
-## Step 6: Expose the app to the internet
+### **Inspect Kubernetes resources**
 
-Streamlit runs on port `8501` inside the cluster. You now need to make it reachable from the public internet.
+Run the following commands to verify that Kubernetes created all resources defined in the deployment manifest.
 
-Because this setup uses Minikube instead of a cloud-managed Kubernetes service, you will use a combination of `minikube tunnel` and `kubectl port-forward`.
+Check deployments:
 
-Open two SSH sessions to the VM:
+```shell
+kubectl get deployments
+```
 
-### Terminal 1
+Check services:
 
-\`\`\`bash
+```shell
+kubectl get services
+```
 
-# Create a network tunnel from the VM into Minikube
+### **Deployment architecture**
 
+The deployment architecture now consists of the following layers:
+
+- Infrastructure: Google Cloud VM
+- Kubernetes distribution: Minikube
+- Resource controller: Kubernetes deployment
+- Workload unit: pod
+- Runtime: Docker container
+- Application: Streamlit
+
+The application is running inside Kubernetes but is not yet accessible from the internet. The next step exposes the service by using Minikube Tunnel and port forwarding, making the Streamlit application accessible through the public IP address of the VM.
+
+## Step 9: **Expose the application and verify access**
+
+The application is running inside a Kubernetes pod but is not yet accessible outside the cluster. Complete the following tasks to expose the service and verify external access:
+
+- Create a network route from Minikube to the external network.
+- Expose the Kubernetes service.
+- Forward requests to the Streamlit application on port `8501`.
+
+### **Verify the service**
+
+The deployment manifest defines a LoadBalancer service, which is required for external access through a public IP address. Confirm that Kubernetes created the service:
+
+```shell
+kubectl get services
+```
+
+The command displays output similar to the following example:
+
+```txt
+NAME              TYPE           CLUSTER-IP
+llmops-service    LoadBalancer   10.x.x.x
+```
+
+### **Start the Minikube tunnel**
+
+In a cloud-managed Kubernetes environment, a LoadBalancer service automatically receives an external IP address. In Minikube, the `minikube tunnel` command simulates this functionality by creating external networking routes and assigning external IP addresses to LoadBalancer services.
+
+Open a second terminal session and run:
+
+```shell
 minikube tunnel
+```
 
-\`\`\`
+This terminal session must remain open while the application is being accessed.
 
-Leave this command running; it establishes routes for LoadBalancer-type services.
+### **Forward the service port**
 
-### Terminal 2
+Open a third terminal session and run:
 
-\`\`\`bash
-
-# Forward the Kubernetes service port to an external port on the VM
-
+```shell
 kubectl port-forward svc/llmops-service 8501:80 --address 0.0.0.0
+```
 
-\`\`\`
+This command forwards traffic as follows:
 
-This forwards traffic from port `8501` on the VM to port `80` on the Kubernetes service.
+- External port `8501` on the VM
+- Kubernetes service port `80`
+- Streamlit container
 
-Finally, in the Google Cloud Console, note the **External IP** of your VM and open it in your browser:
+The `--address 0.0.0.0` flag allows traffic from external sources. Without this flag, access is limited to localhost.
 
-\`\`\`text
+### **Retrieve the external IP address of the VM**
 
-http://\<YOUR\_EXTERNAL\_IP\>:8501
+In the Google Cloud Console, navigate to:
 
-\`\`\`
+**Compute Engine \> VM instances**
 
-You should now see your live Streamlit application running on Google Cloud.
+Copy the external IP address of the VM. The address has the following format:
 
----
+```txt
+34.xxx.xxx.xxx
+```
 
-## Step 7: Configure Grafana Cloud monitoring (optional)
+### **Access the application**
+
+In a browser, go to:
+
+```txt
+http://<external-ip>:8501
+```
+
+For example:
+
+```txt
+http://34.xxx.xxx.xxx:8501
+```
+
+When the page loads for the first time, the application might take a short time to become ready because the Streamlit application is starting, the recommendation pipeline is loading, and the models and dependencies are being initialized.
+
+### **Test the deployment**
+
+After the application loads, submit a sample query to verify that it is working correctly. For example, enter a query such as:
+
+```txt
+Recommend me a AI system similar to RTX
+```
+
+A successful response confirms the following:
+
+- The Docker image was built correctly.
+- The Kubernetes deployment completed successfully.
+- Kubernetes secrets are available to the application.
+- The port forwarding is active.
+- External access is configured.
+
+### **Verify running resources**
+
+Check the application pod and service:
+
+```shell
+kubectl get pods
+kubectl get services
+```
+
+The commands display output similar to the following example:
+
+```txt
+NAME                        READY   STATUS
+llmops-deployment-xxxxx     1/1     Running
+```
+
+A status of `Running` indicates that Kubernetes is managing the Streamlit application successfully.
+
+<Info>
+  #### **Deployment architecture**
+
+  The deployment architecture now consists of the following layers:
+
+  - User browser
+  - Google Cloud external IP address
+  - Minikube tunnel
+  - LoadBalancer service
+  - Kubernetes pod
+  - Docker container
+  - Streamlit application
+
+  The application is publicly accessible from the internet.
+</Info>
+
+## Step 10: Configure Grafana Cloud monitoring (optional)
 
 To monitor resource usage and the health of your cluster, you can integrate Grafana Cloud.
 
@@ -512,53 +806,3 @@ To monitor resource usage and the health of your cluster, you can integrate Graf
 3. Start a new integration, giving it a name such as `minikube` and `monitoring`.
 4. Generate an access token (for example, `minikube-token`) and store it securely.
 5. Grafana will provide a `helm upgrade --install ...` command that deploys the required agents.
-
-On your VM:
-
-\`\`\`bash
-
-# Create a dedicated namespace for monitoring components
-
-kubectl create ns monitoring
-
-\`\`\`
-
-Then paste and run the `helm upgrade` command provided by Grafana. After a few minutes, verify that the agents are running:
-
-\`\`\`bash
-
-kubectl get pods -n monitoring
-
-\`\`\`
-
-Back in Grafana Cloud, open the Kubernetes dashboards to view CPU, memory, and network metrics for your cluster and application.
-
----
-
-## Step 8: Updating the deployed application
-
-When you push a bug fix or feature update to GitHub, you can roll out the change with a short sequence of commands on the VM.
-
-From your application directory:
-
-\`\`\`bash
-
-# 1. Pull the latest code
-
-git pull origin main
-
-# 2. Ensure Docker is pointing to Minikube's daemon (if you opened a new session)
-
-eval \$(minikube docker-env)
-
-# 3. Rebuild the Docker image with the updated code
-
-docker build -t llmops-app:latest .
-
-# 4. Restart the Kubernetes deployment to use the new image
-
-kubectl rollout restart deployment llmops-app
-
-\`\`\`
-
-Kubernetes will roll out updated pods, and once they are ready, refreshing your browser will show the new version of your Streamlit app.
