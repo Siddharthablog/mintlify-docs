@@ -1,5 +1,6 @@
 ---
 title: "Deploying a Streamlit ML App on Google Cloud with Kubernetes and Grafana"
+icon: "server"
 ---
 
 If you have built a Streamlit-based Machine Learning or AI application and are wondering how to make it accessible on the internet, this guide walks through a complete cloud-native deployment workflow. By the end, you will deploy a Streamlit app to a Google Cloud VM, run it inside a Minikube Kubernetes cluster using Docker, expose it to the public internet, and optionally monitor it with Grafana Cloud.
@@ -50,8 +51,7 @@ Create the virtual machine that will host the Kubernetes cluster and application
 1. Sign in to the Google Cloud Console.
 2. Click **Compute Engine \> VM instances**, and then click **Create instance**.
 3. Set a descriptive name, for example ,`streamlit-app-server`.
-4. Under **Machine configuration**, select an E2 machine type.\
-   If you are running ML workloads, ensure that the machine type has at least 16 GB of RAM, for example, `e2-standard-4`.
+4. Under **Machine configuration**, select an E2 machine type.<br />If you are running ML workloads, ensure that the machine type has at least 16 GB of RAM, for example, `e2-standard-4`.
 5. Under **Boot disk**, click **Change**, select Ubuntu 24.04 LTS, and increase the disk size to approximately 256 GB to accommodate Docker images and model files.
 6. In the **Firewall** section, enable **Allow HTTP traffic** and **Allow HTTPS traffic**.
 7. Click **Create** and wait until the VM is ready.
@@ -63,11 +63,8 @@ Create the virtual machine that will host the Kubernetes cluster and application
   At this stage, Google Cloud provisions a dedicated Ubuntu server for the deployment. This server hosts the following components:
 
   - Docker Engine
-
   - Minikube Kubernetes cluster
-
   - `kubectl` command-line tool
-
   - Streamlit application containers
 
   The VM supports the entire deployment architecture.

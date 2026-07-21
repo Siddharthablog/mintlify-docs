@@ -27,6 +27,8 @@
             "group": "AI Learnings",
             "pages": [
               "essentials/gcaideploymet",
+              "essentials/fine-tunig",
+              "essentials/mcp-rag",
               "essentials/settings",
               "essentials/navigation"
             ]
